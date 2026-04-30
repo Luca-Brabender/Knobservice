@@ -7,5 +7,6 @@
         <permission name="android.permission.BLUETOOTH_SCAN"/>
         <permission name="android.permission.ACCESS_FINE_LOCATION"/>
         <permission name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+        <permission name="android.car.permission.CAR_INPUT"/>
     </privapp-permissions>
 </permissions>

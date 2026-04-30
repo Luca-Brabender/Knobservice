@@ -24,7 +24,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.hardware.input.InputManager
-import android.media.AudioManager
 import android.os.Build
 import android.os.ParcelUuid
 import android.os.SystemClock
@@ -35,6 +34,11 @@ import androidx.annotation.RequiresPermission
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.UUID
+import android.car.Car
+import android.car.input.CarInputManager
+import android.view.Display
+import java.util.concurrent.Executors
+import java.util.concurrent.ExecutorService
 
 class KnobService : Service() {
 
@@ -48,6 +52,9 @@ class KnobService : Service() {
     // Standard UUID für Client Characteristic Configuration (CCCD) um Notifications zu aktivieren
     private val CONFIG_DESCRIPTOR = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
+    private lateinit var car: Car
+    private lateinit var carInputManager: CarInputManager
+    private val inputExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
     private lateinit var bluetoothAdapter: BluetoothAdapter
     private var bluetoothGatt: BluetoothGatt? = null
     private var isScanning = false
@@ -67,13 +74,13 @@ class KnobService : Service() {
 
     // Konstanten für Tasten
     private val KEY_NEXT = KeyEvent.KEYCODE_TAB
-    private val KEY_PREV = KeyEvent.KEYCODE_NAVIGATE_PREVIOUS
+    private val KEY_PREV = KeyEvent.KEYCODE_NAVIGATE_NEXT
     private val KEY_CLICK = KeyEvent.KEYCODE_DPAD_CENTER
     private val KEY_SYSTEM_UP = KeyEvent.KEYCODE_SYSTEM_NAVIGATION_UP
     private val KEY_SYSTEM_DOWN = KeyEvent.KEYCODE_SYSTEM_NAVIGATION_DOWN
     private val KEY_SYSTEM_LEFT = KeyEvent.KEYCODE_SYSTEM_NAVIGATION_LEFT
     private val KEY_SYSTEM_RIGHT = KeyEvent.KEYCODE_SYSTEM_NAVIGATION_RIGHT
-    private val test = MotionEvent.ACTION_UP
+    private val test = KeyEvent.KEYCODE_DPAD_RIGHT
 
     // DPAD-down oder up
     private val KEY_DOWN = KeyEvent.KEYCODE_DPAD_DOWN
@@ -194,6 +201,12 @@ class KnobService : Service() {
             registerReceiver(bondStateReceiver, filter, Context.RECEIVER_EXPORTED)
         } else {
             registerReceiver(bondStateReceiver, filter)
+        }
+
+        car = Car.createCar(this)
+        carInputManager = car.getCarManager(Car.CAR_INPUT_SERVICE) as CarInputManager
+        if (carInputManager == null) {
+            Log.e("KnobService", "CarInputManager konnte nicht geladen werden!")
         }
 
         setupBluetooth()
@@ -340,7 +353,7 @@ class KnobService : Service() {
                 "SnapPoint: $currentSnapPoint, Finger: $fingerCount, Button: ${if (buttonState == 1) "DOWN" else "UP"}"
             )
             if (buttonState == 1 && lastButtonState == 0) {
-                injectKeyEvent(KEY_CLICK)
+                injectCarClick()
             }
             lastButtonState = buttonState
 
@@ -354,8 +367,8 @@ class KnobService : Service() {
                         Log.d("KnobService", "Drehung nach RECHTS (Delta: $delta)")
                         when (fingerCount) {
                             // Nutze DPAD_RIGHT (22) statt KEY_NEXT (261)
-                            0, 1, 2 -> injectTabNavigation(true)
-                            3 -> injectKeyEvent(20) // DPAD_DOWN
+                            0, 1, 2 -> injectRotaryCommand(true)
+                            3 -> injectCarInputKey(KEY_SYSTEM_UP) // DPAD_DOWN
                             4 -> zapToMenu(1)
                             5 -> injectKeyEvent(KeyEvent.KEYCODE_BACK)
                         }
@@ -363,8 +376,8 @@ class KnobService : Service() {
                         Log.d("KnobService", "Drehung nach LINKS (Delta: $delta)")
 
                         when (fingerCount) {
-                            0, 1, 2 -> injectTabNavigation(false)
-                            3 -> injectKeyEvent(19) // DPAD_UP
+                            0, 1, 2 -> injectRotaryCommand(false)
+                            3 -> injectCarInputKey(KEY_SYSTEM_DOWN) // DPAD_UP
                             4 -> zapToMenu(-1)
                             5 -> injectKeyEvent(KeyEvent.KEYCODE_BACK)
                         }
@@ -436,6 +449,36 @@ class KnobService : Service() {
                 true
             } catch (inner: Exception) {
                 false
+            }
+        }
+    }
+
+    private fun injectCarClick() {
+        inputExecutor.execute {
+            try {
+                // Wir nutzen den Befehl aus deiner README: KeyCode 23 (DPAD_CENTER)
+                val command = "cmd car_service inject-key 23"
+                val process = Runtime.getRuntime().exec(command)
+                process.waitFor()
+                Log.d("KnobService", "System-Leiste Klick (23) via car_service gesendet")
+            } catch (e: Exception) {
+                Log.e("KnobService", "Shell Click failed: ${e.message}")
+            }
+        }
+    }
+
+    private fun injectRotaryCommand(clockwise: Boolean) {
+        inputExecutor.execute {
+            try {
+                // Wir spiegeln exakt deinen funktionierenden Shell-Befehl
+                val direction = if (clockwise) "-c true" else ""
+                val command = "cmd car_service inject-rotary $direction"
+
+                val process = Runtime.getRuntime().exec(command)
+                process.waitFor()
+                Log.d("KnobService", "Rotary-Kommando gesendet: clockwise=$clockwise")
+            } catch (e: Exception) {
+                Log.e("KnobService", "Shell Rotary failed: ${e.message}")
             }
         }
     }
@@ -532,6 +575,51 @@ class KnobService : Service() {
                 Log.e("KnobService", "Fehler beim Injizieren des KeyEvents", e)
             }
         }.start()
+    }
+
+    private fun injectNativeRotary(clockwise: Boolean) {
+        val manager = carInputManager ?: return
+        val SOURCE_ROTARY_ENCODER = 0x00400000
+        val AXIS_SCROLL = 26 // Standard-Achse für Rotary-Scrollen in AAOS
+
+        inputExecutor.execute {
+            try {
+                val now = SystemClock.uptimeMillis()
+                val scrollValue = if (clockwise) 1.0f else -1.0f
+
+                val pointerProperties = MotionEvent.PointerProperties().apply { id = 0 }
+                val pointerCoords = MotionEvent.PointerCoords().apply {
+                    setAxisValue(AXIS_SCROLL, scrollValue)
+                }
+
+                val event = MotionEvent.obtain(
+                    now, now, MotionEvent.ACTION_SCROLL,
+                    1, arrayOf(pointerProperties), arrayOf(pointerCoords),
+                    0, 0, 1.0f, 1.0f, 0, 0,
+                    SOURCE_ROTARY_ENCODER, 0
+                )
+
+                manager.injectKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, 0, 0), 0) // Wecken
+                // Hinweis: MotionEvents werden im CarInputManager oft über injectMotionEvent gesendet
+                // Falls deine API-Version das nicht hat, bleib bei Methode 1.
+                Log.d("KnobService", "Native Rotary Scroll injiziert: $scrollValue")
+            } catch (e: Exception) {
+                Log.e("KnobService", "Native Rotary failed", e)
+            }
+        }
+    }
+
+    private fun injectCarInputKey(keyCode: Int) {
+        inputExecutor.execute {
+            try {
+                val command = "cmd car_service inject-key $keyCode"
+                val process = Runtime.getRuntime().exec(command)
+                process.waitFor()
+                Log.d("KnobService", "Shell-Kommando erfolgreich abgesetzt: $keyCode")
+            } catch (e: Exception) {
+                Log.e("KnobService", "Fehler beim Ausführen des Shell-Kommandos", e)
+            }
+        }
     }
 
     override fun onBind(intent: Intent?) = null
