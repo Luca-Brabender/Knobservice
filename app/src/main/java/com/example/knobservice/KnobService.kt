@@ -42,14 +42,12 @@ import java.util.concurrent.ExecutorService
 
 class KnobService : Service() {
 
-    // TODO: HIER DIE ECHTEN UUIDs DEINES DREHKNOPFES EINTRAGEN!
     private val KNOB_SERVICE_UUID =
-        UUID.fromString("12345678-1234-1234-1234-123456789abc") // Beispiel: Battery Service
+        UUID.fromString("12345678-1234-1234-1234-123456789abc")
     private val TX_CHARACTERISTIC_UUID =
-        UUID.fromString("87654321-4321-4321-4321-cba987654321") // Beispiel: Battery Level
+        UUID.fromString("87654321-4321-4321-4321-cba987654321")
     private val RX_CHARACTERISTIC_UUID = UUID.fromString("11111111-2222-3333-4444-555555555555")
 
-    // Standard UUID für Client Characteristic Configuration (CCCD) um Notifications zu aktivieren
     private val CONFIG_DESCRIPTOR = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
     private lateinit var car: Car
@@ -72,7 +70,6 @@ class KnobService : Service() {
 
     private var lastZapTime = 0L
 
-    // Konstanten für Tasten
     private val KEY_NEXT = KeyEvent.KEYCODE_TAB
     private val KEY_PREV = KeyEvent.KEYCODE_NAVIGATE_NEXT
     private val KEY_CLICK = KeyEvent.KEYCODE_DPAD_CENTER
@@ -82,14 +79,11 @@ class KnobService : Service() {
     private val KEY_SYSTEM_RIGHT = KeyEvent.KEYCODE_SYSTEM_NAVIGATION_RIGHT
     private val test = KeyEvent.KEYCODE_DPAD_RIGHT
 
-    // DPAD-down oder up
     private val KEY_DOWN = KeyEvent.KEYCODE_DPAD_DOWN
     private val KEY_UP = KeyEvent.KEYCODE_DPAD_UP
 
-    //App-switching Menü
     private val KEY_APP_SWITCH = KeyEvent.KEYCODE_APP_SWITCH
 
-    //back
     private val KEY_BACK = KeyEvent.KEYCODE_BACK
 
     private var isFirstRotation = true // Global in der Klasse
@@ -305,10 +299,7 @@ class KnobService : Service() {
         characteristic: BluetoothGattCharacteristic
     ) {
         try {
-            // 1. Lokal Notification einschalten
             gatt.setCharacteristicNotification(characteristic, true)
-
-            // 2. Remote (am Gerät) Notification einschalten per Descriptor Write
             val descriptor = characteristic.getDescriptor(CONFIG_DESCRIPTOR)
             if (descriptor != null) {
                 // Für API 33+ gibt es writeDescriptor(..., value), hier die kompatible Variante:
@@ -325,7 +316,6 @@ class KnobService : Service() {
         if (value == null || value.isEmpty()) return
         if(value.size < 12) return
 
-        // 1. RAW DATA ANALYSE (Wichtig für dein Reverse Engineering)
         val hexString = value.joinToString(" ") { "%02x".format(it) }
         Log.i("KnobService", "INPUT EMPFANGEN: [ $hexString ]")
 
@@ -386,7 +376,6 @@ class KnobService : Service() {
         if (currentTime - lastZapTime < 800) return
         lastZapTime = currentTime
 
-        // Index berechnen
         currentMenuIndex = if (direction > 0) (currentMenuIndex + 1) % carMenus.size
         else if (currentMenuIndex <= 0) carMenus.size - 1 else currentMenuIndex - 1
 
@@ -396,7 +385,6 @@ class KnobService : Service() {
         val intent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
             component = cn
-            // WICHTIG: ReorderToFront bringt die App nach oben, NoAnimation macht es verzögerungsfrei
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
                     Intent.FLAG_ACTIVITY_NO_ANIMATION)
@@ -420,7 +408,7 @@ class KnobService : Service() {
             user
         } catch (e: Exception) {
             Log.w("KnobService", "Konnte CurrentUser nicht ermitteln, nutze Fallback 10")
-            10 // Dein Pi nutzt laut Log die 10
+            10
         }
     }
 
@@ -460,7 +448,6 @@ class KnobService : Service() {
     private fun injectRotaryCommand(clockwise: Boolean) {
         inputExecutor.execute {
             try {
-                // Wir spiegeln exakt deinen funktionierenden Shell-Befehl
                 val direction = if (clockwise) "-c true" else ""
                 val command = "cmd car_service inject-rotary $direction"
 
