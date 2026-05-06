@@ -7,6 +7,8 @@ This Service enables the custom-made rotary knob to control the Android Automoti
 - Micro SD Card (32GB or more)
 - Linux OS with least 300GB of free space
 
+note: multiple 64 GB SD cards were used for this project
+
 ## Setting up Android Automotive
 To get the AOSP Sourcecode and the specific libraries for Raspberry Pi follow the instructions from Grapeup: https://github.com/grapeup/aaos_local_manifest
 
@@ -45,5 +47,53 @@ Then add the following line to include the Knobservice in the build:
 PRODUCT_PACKAGES += Knobservice
 ```
 
-##Creating the Image
+## Flahsing the Image
+
+insert the micro SD card into your computer and run the following commands:
+```bash
+# Check the device name of your SD card (e.g., /dev/sdX)
+lsblk
+# Unmount the SD card if it is automatically mounted (sdX is just a placeholder)
+sudo umount /dev/sdX*
+# Flash the image to the SD Card
+sudo fdisk /dev/sdX
+```
+
+the ```fdisk``` command opens a  terminal-based interface. Use the following commands to flash the image:
+```text
+# Inside fdisk, use the following commands:
+o # Create a new empty DOS partition table
+
+# CREATE PARTITION 1:
+n # Add a new partition
+p # Primary partition
+1 # Partition number
+Enter # First sector (accept default)
++128M # Last sector (size of the partition)
+t # Change partition type
+c # Set partition type to W95 FAT32 (LBA)
+a # Toggle the bootable flag on the partition
+
+# CREATE PARTITION 2:
+n # Add a new partition
+p # Primary partition
+2 # Partition number
+Enter # First sector (accept default)
++2048M # Last sector (size of the partition)
+
+# CREATE PARTITION 3:
+n # Add a new partition
+p # Primary partition
+3 # Partition number
+Enter # First sector (accept default)
++1024M # Last sector (size of the partition)
+
+# CREATE PARTITION 4:
+n # Add a new partition
+p # Primary partition
+4 # Partition number
+Enter # First sector (accept default)
+Enter # Last sector (accept default) 
+```
+
 
