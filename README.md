@@ -10,7 +10,15 @@ This Service enables the custom-made rotary knob to control the Android Automoti
 note: multiple 64 GB SD cards were used for this project
 
 ## Setting up Android Automotive
-To get the AOSP Sourcecode and the specific libraries for Raspberry Pi follow the instructions from Grapeup: https://github.com/grapeup/aaos_local_manifest
+To get the AOSP Sourcecode and the specific libraries for Raspberry Pi, use following commands:
+```bash
+# Get the AOSP source code
+repo init -u https://android.googlesource.com/platform/manifest -b android-13.0.0_r71 --depth=1
+git clone https://github.com/grapeup/aaos_local_manifest.git .repo/local_manifests
+repo sync -j8
+````
+
+Depending on your internet connection, the download process may take several hours.
 
 ## Setting up The Knobservice
 go to packages/apps and create a new folder called "Knobservice". Inside this folder, extract the following files:
@@ -60,7 +68,7 @@ sudo fdisk /dev/sdX
 ```
 
 the ```fdisk``` command opens a  terminal-based interface. Use the following commands to flash the image:
-```text
+```bash
 # Inside fdisk, use the following commands:
 o # Create a new empty DOS partition table
 
