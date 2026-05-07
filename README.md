@@ -13,10 +13,17 @@ note: multiple 64 GB SD cards were used for this project
 To get the AOSP Sourcecode and the specific libraries for Raspberry Pi, use following commands:
 ```bash
 # Get the AOSP source code
-repo init -u https://android.googlesource.com/platform/manifest -b android-13.0.0_r71 --depth=1
-git clone https://github.com/grapeup/aaos_local_manifest.git .repo/local_manifests
-repo sync -j8
+repo init -u https://android.googlesource.com/platform/manifest -b android-13.0.0_r75 --depth=1
+git clone https://github.com/Luca-Brabender/aaos_local_manifest.git .repo/local_manifestsrepo sync
+repo sync
 ````
+compile using following commands:
+```bash
+# Compile the AOSP source code
+. build/envsetup.sh
+lunch aosp_rpi4_car-userdebug
+make -j$(nproc) bootimage systemimage vendorimage
+```
 
 Depending on your internet connection, the download process may take several hours.
 
