@@ -70,24 +70,9 @@ class KnobService : Service() {
 
     private var lastZapTime = 0L
 
-    private val KEY_NEXT = KeyEvent.KEYCODE_TAB
-    private val KEY_PREV = KeyEvent.KEYCODE_NAVIGATE_NEXT
-    private val KEY_CLICK = KeyEvent.KEYCODE_DPAD_CENTER
     private val KEY_SYSTEM_UP = KeyEvent.KEYCODE_SYSTEM_NAVIGATION_UP
     private val KEY_SYSTEM_DOWN = KeyEvent.KEYCODE_SYSTEM_NAVIGATION_DOWN
-    private val KEY_SYSTEM_LEFT = KeyEvent.KEYCODE_SYSTEM_NAVIGATION_LEFT
-    private val KEY_SYSTEM_RIGHT = KeyEvent.KEYCODE_SYSTEM_NAVIGATION_RIGHT
-    private val test = KeyEvent.KEYCODE_DPAD_RIGHT
 
-    private val KEY_DOWN = KeyEvent.KEYCODE_DPAD_DOWN
-    private val KEY_UP = KeyEvent.KEYCODE_DPAD_UP
-
-    private val KEY_APP_SWITCH = KeyEvent.KEYCODE_APP_SWITCH
-
-    private val KEY_BACK = KeyEvent.KEYCODE_BACK
-
-    private var isFirstRotation = true // Global in der Klasse
-    private var lastNudgeTime = 0L
 
     private val CHANNEL_ID = "KnobServiceChannel"
     private val NOTIFICATION_ID = 1
@@ -131,7 +116,6 @@ class KnobService : Service() {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 Log.d("KnobService", "MTU erfolgreich auf $mtu gesetzt. Suche Services...")
             }
-            // Erst nach MTU-Wechsel nach Services suchen ist stabiler
             gatt.discoverServices()
         }
 
@@ -143,7 +127,6 @@ class KnobService : Service() {
 
                 if (characteristic != null) {
                     Log.d("KnobService", "Service & Charakteristik gefunden. Aktiviere Datenstrom...")
-                    // Nutze NUR den Aufruf der Hilfsmethode, sie macht bereits alles Nötige!
                     enableNotification(gatt, characteristic)
                 } else {
                     Log.e("KnobService", "Fehler: Charakteristik nicht gefunden. UUIDs prüfen!")
@@ -159,7 +142,6 @@ class KnobService : Service() {
             handleKnobData(value)
         }
 
-        // Abwärtskompatibilität (nur zur Sicherheit)
         @Deprecated("Deprecated in Java")
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             handleKnobData(characteristic.value)
@@ -206,7 +188,6 @@ class KnobService : Service() {
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     override fun onDestroy() {
         super.onDestroy()
-        // Wichtig: Receiver wieder abmelden, um Memory Leaks zu vermeiden
         unregisterReceiver(bondStateReceiver)
         bluetoothGatt?.close()
     }
@@ -302,7 +283,6 @@ class KnobService : Service() {
             gatt.setCharacteristicNotification(characteristic, true)
             val descriptor = characteristic.getDescriptor(CONFIG_DESCRIPTOR)
             if (descriptor != null) {
-                // Für API 33+ gibt es writeDescriptor(..., value), hier die kompatible Variante:
                 descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
                 gatt.writeDescriptor(descriptor)
                 Log.d("KnobService", "Notifications aktiviert.")
