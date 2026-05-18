@@ -53,13 +53,12 @@ KnobService/
                 └── KnobService.kt   # Hauptlogik (Bluetooth & Event-Injektion)
 ```
 
-From your source code directory, go to /devices/brcmrpi4-car/device.mk and find the following code sample inside:
+From your source code directory, go to /devices/brcm/rpi4/aosp_rpi4_car.mk, then add following code:
+
 ```text
-PRODUCT_PACKAGES +=
-```
-Then add the following line to include the Knobservice in the build:
-```text
-PRODUCT_PACKAGES += Knobservice
+PRODUCT_PACKAGES += \
+    KnobService \
+    privapp-permissions-knob.xml
 ```
 
 ## Flahsing the Image
@@ -110,5 +109,23 @@ p # Primary partition
 Enter # First sector (accept default)
 Enter # Last sector (accept default) 
 ```
+
+Now, time to write the image to the SD card. Use the following commands to fill each partition:
+
+```bash
+# mount the first partition
+sudo mount /dev/sdX1 /mnt
+# Copy the boot files to the first partition
+sudo cp out/target/product/rpi4/rpiboot/* /mnt/
+# Put the system image on the second partition
+sudo dd if=out/target/product/rpi4_car/system.img of=/dev/sdX2 bs=1M status=progress
+# Put the vendor image on the third partition
+sudo dd if=out/target/product/rpi4_car/vendor.img of=/dev/sdX3 bs=1M status=progress
+```
+
+After the flashing process is complete, safely eject the SD card and insert it into your Raspberry Pi. 
+Power on the Raspberry Pi, and it should boot into Android Automotive with the KnobService running in the background, ready to receive input from the rotary knob.
+
+
 
 
