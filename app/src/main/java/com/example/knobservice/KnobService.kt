@@ -131,11 +131,6 @@ class KnobService : Service() {
         ) {
             handleKnobData(value)
         }
-
-        @Deprecated("Deprecated in Java")
-        override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
-            handleKnobData(characteristic.value)
-        }
     }
 
 

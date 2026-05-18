@@ -17,15 +17,9 @@ repo init -u https://android.googlesource.com/platform/manifest -b android-13.0.
 git clone https://github.com/Luca-Brabender/aaos_local_manifest.git .repo/local_manifestsrepo sync
 repo sync
 ````
-compile using following commands:
-```bash
-# Compile the AOSP source code
-. build/envsetup.sh
-lunch aosp_rpi4_car-userdebug
-make -j$(nproc) bootimage systemimage vendorimage
-```
-
 Depending on your internet connection, the download process may take several hours.
+
+
 
 ## Setting up The Knobservice
 go to packages/apps and create a new folder called "Knobservice". Inside this folder, extract the following files:
@@ -43,7 +37,7 @@ This is how the folder structure should look like:
 ```text
 KnobService/
 ├── Android.bp                 
-├── AndroidManifest_8.xml      
+├── AndroidManifest.xml      
 ├── privapp-permissions-knob.xml 
 └── src/
     └── com/
@@ -59,6 +53,14 @@ From your source code directory, go to /devices/brcm/rpi4/aosp_rpi4_car.mk, then
 PRODUCT_PACKAGES += \
     KnobService \
     privapp-permissions-knob.xml
+```
+
+compile using following commands:
+```bash
+# Compile the AOSP source code
+. build/envsetup.sh
+lunch aosp_rpi4_car-userdebug
+make -j$(nproc) bootimage systemimage vendorimage
 ```
 
 ## Flahsing the Image
@@ -108,6 +110,14 @@ p # Primary partition
 4 # Partition number
 Enter # First sector (accept default)
 Enter # Last sector (accept default) 
+
+w # Write the partition table to the SD card and exit
+```
+
+Creating the filesystems:
+```bash
+sudo mkfs.vfat /dev/sdX1
+sudo mkfs.ext4 -L userdata /dev/sdX4
 ```
 
 Now, time to write the image to the SD card. Use the following commands to fill each partition:
@@ -116,7 +126,7 @@ Now, time to write the image to the SD card. Use the following commands to fill 
 # mount the first partition
 sudo mount /dev/sdX1 /mnt
 # Copy the boot files to the first partition
-sudo cp out/target/product/rpi4/rpiboot/* /mnt/
+sudo cp -r out/target/product/rpi4/rpiboot/* /mnt/
 # Put the system image on the second partition
 sudo dd if=out/target/product/rpi4_car/system.img of=/dev/sdX2 bs=1M status=progress
 # Put the vendor image on the third partition
