@@ -46,6 +46,7 @@ KnobService/
                 ├── BootReceiver.kt  
                 └── KnobService.kt   
 ```
+NOTE: Make sure you change the Android.txt in the repository to Android.bp, otherwise the build system won't recognize the new service.
 
 From your source code directory, go to /devices/brcm/rpi4/aosp_rpi4_car.mk, then add following code:
 
