@@ -43,14 +43,14 @@ This is how the folder structure should look like:
 ```text
 KnobService/
 ├── Android.bp                 
-├── AndroidManifest_8.xml      # System-Berechtigungen & Service-Definition
-├── privapp-permissions-knob.xml # Whitelist für privilegierte Berechtigungen
+├── AndroidManifest_8.xml      
+├── privapp-permissions-knob.xml
 └── src/
     └── com/
         └── example/
             └── knobservice/
-                ├── BootReceiver.kt  # Startet den Service automatisch nach dem Booten
-                └── KnobService.kt   # Hauptlogik (Bluetooth & Event-Injektion)
+                ├── BootReceiver.kt  
+                └── KnobService.kt   
 ```
 
 From your source code directory, go to /devices/brcm/rpi4/aosp_rpi4_car.mk, then add following code:
