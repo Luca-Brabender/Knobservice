@@ -56,6 +56,7 @@ PRODUCT_PACKAGES += \
     privapp-permissions-knob.xml
 ```
 
+## Build Android Automotive
 compile using following commands:
 ```bash
 # Compile the AOSP source code
