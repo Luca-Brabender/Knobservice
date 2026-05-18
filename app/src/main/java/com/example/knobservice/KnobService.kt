@@ -24,13 +24,11 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.hardware.input.InputManager
-import android.media.AudioManager
 import android.os.Build
 import android.os.ParcelUuid
 import android.os.SystemClock
 import android.util.Log
 import android.view.KeyEvent
-import android.view.MotionEvent
 import androidx.annotation.RequiresPermission
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -38,14 +36,12 @@ import java.util.UUID
 
 class KnobService : Service() {
 
-    // TODO: HIER DIE ECHTEN UUIDs DEINES DREHKNOPFES EINTRAGEN!
     private val KNOB_SERVICE_UUID =
         UUID.fromString("12345678-1234-1234-1234-123456789abc") // Beispiel: Battery Service
     private val TX_CHARACTERISTIC_UUID =
         UUID.fromString("87654321-4321-4321-4321-cba987654321") // Beispiel: Battery Level
     private val RX_CHARACTERISTIC_UUID = UUID.fromString("11111111-2222-3333-4444-555555555555")
 
-    // Standard UUID für Client Characteristic Configuration (CCCD) um Notifications zu aktivieren
     private val CONFIG_DESCRIPTOR = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
     private lateinit var bluetoothAdapter: BluetoothAdapter
@@ -66,27 +62,7 @@ class KnobService : Service() {
     private var lastZapTime = 0L
 
     // Konstanten für Tasten
-    private val KEY_NEXT = KeyEvent.KEYCODE_TAB
-    private val KEY_PREV = KeyEvent.KEYCODE_NAVIGATE_PREVIOUS
     private val KEY_CLICK = KeyEvent.KEYCODE_DPAD_CENTER
-    private val KEY_SYSTEM_UP = KeyEvent.KEYCODE_SYSTEM_NAVIGATION_UP
-    private val KEY_SYSTEM_DOWN = KeyEvent.KEYCODE_SYSTEM_NAVIGATION_DOWN
-    private val KEY_SYSTEM_LEFT = KeyEvent.KEYCODE_SYSTEM_NAVIGATION_LEFT
-    private val KEY_SYSTEM_RIGHT = KeyEvent.KEYCODE_SYSTEM_NAVIGATION_RIGHT
-    private val test = MotionEvent.ACTION_UP
-
-    // DPAD-down oder up
-    private val KEY_DOWN = KeyEvent.KEYCODE_DPAD_DOWN
-    private val KEY_UP = KeyEvent.KEYCODE_DPAD_UP
-
-    //App-switching Menü
-    private val KEY_APP_SWITCH = KeyEvent.KEYCODE_APP_SWITCH
-
-    //back
-    private val KEY_BACK = KeyEvent.KEYCODE_BACK
-
-    private var isFirstRotation = true // Global in der Klasse
-    private var lastNudgeTime = 0L
 
     private val CHANNEL_ID = "KnobServiceChannel"
     private val NOTIFICATION_ID = 1
@@ -130,7 +106,6 @@ class KnobService : Service() {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 Log.d("KnobService", "MTU erfolgreich auf $mtu gesetzt. Suche Services...")
             }
-            // Erst nach MTU-Wechsel nach Services suchen ist stabiler
             gatt.discoverServices()
         }
 
@@ -142,7 +117,6 @@ class KnobService : Service() {
 
                 if (characteristic != null) {
                     Log.d("KnobService", "Service & Charakteristik gefunden. Aktiviere Datenstrom...")
-                    // Nutze NUR den Aufruf der Hilfsmethode, sie macht bereits alles Nötige!
                     enableNotification(gatt, characteristic)
                 } else {
                     Log.e("KnobService", "Fehler: Charakteristik nicht gefunden. UUIDs prüfen!")
@@ -150,7 +124,6 @@ class KnobService : Service() {
             }
         }
 
-        // Unterstützung für Android 13+ (dein System)
         override fun onCharacteristicChanged(
             gatt: BluetoothGatt,
             characteristic: BluetoothGattCharacteristic,
@@ -159,7 +132,6 @@ class KnobService : Service() {
             handleKnobData(value)
         }
 
-        // Abwärtskompatibilität (nur zur Sicherheit)
         @Deprecated("Deprecated in Java")
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             handleKnobData(characteristic.value)
@@ -169,10 +141,8 @@ class KnobService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        // 1. Benachrichtigungskanal erstellen (Pflicht ab Android 8)
         createNotificationChannel()
 
-        // 2. Notification bauen und Service in den Vordergrund bringen
         val notification: Notification = Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("Knob Service läuft")
             .setContentText("Suche nach BLE-Drehknopf...")
@@ -202,7 +172,6 @@ class KnobService : Service() {
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     override fun onDestroy() {
         super.onDestroy()
-        // Wichtig: Receiver wieder abmelden, um Memory Leaks zu vermeiden
         unregisterReceiver(bondStateReceiver)
         bluetoothGatt?.close()
     }
@@ -228,7 +197,6 @@ class KnobService : Service() {
     private fun startScan() {
         if (isScanning) return
 
-        // Filter setzen, damit wir nur unseren Drehknopf finden
         val filters = listOf(
             ScanFilter.Builder().setServiceUuid(ParcelUuid(KNOB_SERVICE_UUID)).build()
         )
@@ -296,13 +264,10 @@ class KnobService : Service() {
         characteristic: BluetoothGattCharacteristic
     ) {
         try {
-            // 1. Lokal Notification einschalten
             gatt.setCharacteristicNotification(characteristic, true)
 
-            // 2. Remote (am Gerät) Notification einschalten per Descriptor Write
             val descriptor = characteristic.getDescriptor(CONFIG_DESCRIPTOR)
             if (descriptor != null) {
-                // Für API 33+ gibt es writeDescriptor(..., value), hier die kompatible Variante:
                 descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
                 gatt.writeDescriptor(descriptor)
                 Log.d("KnobService", "Notifications aktiviert.")
@@ -316,7 +281,6 @@ class KnobService : Service() {
         if (value == null || value.isEmpty()) return
         if(value.size < 12) return
 
-        // 1. RAW DATA ANALYSE (Wichtig für dein Reverse Engineering)
         val hexString = value.joinToString(" ") { "%02x".format(it) }
         Log.i("KnobService", "INPUT EMPFANGEN: [ $hexString ]")
 
@@ -347,13 +311,9 @@ class KnobService : Service() {
             if (lastSnapPoint != null) {
                 val delta = currentSnapPoint - lastSnapPoint!!
                 if (delta != 0) {
-                    //forceRotaryFocus()
-                    //injectRotaryScroll(delta)
-                    //injectKeyEvent(80)
                     if (delta > 0) {
                         Log.d("KnobService", "Drehung nach RECHTS (Delta: $delta)")
                         when (fingerCount) {
-                            // Nutze DPAD_RIGHT (22) statt KEY_NEXT (261)
                             0, 1, 2 -> injectTabNavigation(true)
                             3 -> injectKeyEvent(20) // DPAD_DOWN
                             4 -> zapToMenu(1)
@@ -380,7 +340,6 @@ class KnobService : Service() {
         if (currentTime - lastZapTime < 800) return
         lastZapTime = currentTime
 
-        // Index berechnen
         currentMenuIndex = if (direction > 0) (currentMenuIndex + 1) % carMenus.size
         else if (currentMenuIndex <= 0) carMenus.size - 1 else currentMenuIndex - 1
 
@@ -390,7 +349,7 @@ class KnobService : Service() {
         val intent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
             component = cn
-            // WICHTIG: ReorderToFront bringt die App nach oben, NoAnimation macht es verzögerungsfrei
+
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
                     Intent.FLAG_ACTIVITY_NO_ANIMATION)
@@ -398,7 +357,6 @@ class KnobService : Service() {
 
         Log.i("KnobService", "Zapping zu: $componentString (Index: $currentMenuIndex)")
 
-        // Wir versuchen den aktuellen User (10) zu finden, sonst nehmen wir die 10 als Fallback
         val currentUserId = getCurrentForegroundUser()
         val success = startActivityAsSpecificUser(intent, currentUserId)
 
@@ -416,7 +374,6 @@ class KnobService : Service() {
             user
         } catch (e: Exception) {
             Log.w("KnobService", "Konnte CurrentUser nicht ermitteln, nutze Fallback 10")
-            10 // Dein Pi nutzt laut Log die 10
         }
     }
 
@@ -431,58 +388,11 @@ class KnobService : Service() {
         } catch (e: Exception) {
             Log.e("KnobService", "startActivityAsUser für User $userId fehlgeschlagen: ${e.message}")
             try {
-                // Letzter Rettungsversuch: Normaler Start
                 startActivity(intent)
                 true
             } catch (inner: Exception) {
                 false
             }
-        }
-    }
-
-    private fun forceRotaryFocus() {
-        val intent = Intent("com.android.car.rotary.ACTION_RESTORE_DEFAULT_FOCUS")
-        intent.setPackage("com.android.car.rotary")
-
-        try {
-            val userHandleClass = Class.forName("android.os.UserHandle")
-            val allUser = userHandleClass.getField("ALL").get(null)
-            val method = Context::class.java.getMethod("sendBroadcastAsUser", Intent::class.java, userHandleClass)
-            method.invoke(this, intent, allUser)
-        } catch (e: Exception) {
-            sendBroadcast(intent)
-        }
-    }
-
-    private fun injectRotaryScroll(delta: Int) {
-        val SOURCE_ROTARY_ENCODER = 0x00400000
-        // Wir senden VSCROLL (9) und SCROLL (26), um sicherzugehen
-        val AXIS_VSCROLL = 9
-        val AXIS_SCROLL = 26
-
-        val eventTime = SystemClock.uptimeMillis()
-        val pointerProperties = MotionEvent.PointerProperties().apply {
-            id = 0
-            toolType = MotionEvent.TOOL_TYPE_UNKNOWN
-        }
-        val pointerCoords = MotionEvent.PointerCoords().apply {
-            setAxisValue(AXIS_VSCROLL, if (delta > 0) 1.0f else -1.0f)
-            setAxisValue(AXIS_SCROLL, if (delta > 0) 1.0f else -1.0f)
-        }
-
-        val motionEvent = MotionEvent.obtain(
-            eventTime, eventTime,
-            MotionEvent.ACTION_SCROLL,
-            1, arrayOf(pointerProperties), arrayOf(pointerCoords),
-            0, 0, 1.0f, 1.0f, 0, 0,
-            SOURCE_ROTARY_ENCODER, 0
-        )
-
-        try {
-            (getSystemService(Context.INPUT_SERVICE) as InputManager).injectInputEvent(motionEvent, 0)
-            Log.d("KnobService", "WAKE UP: Rotary Scroll gesendet")
-        } catch (e: Exception) {
-            Log.e("KnobService", "Scroll Fail", e)
         }
     }
 
@@ -519,7 +429,7 @@ class KnobService : Service() {
                 // UP-Event mit metaState
                 val eventUp = KeyEvent(
                     eventTime, eventTime, KeyEvent.ACTION_UP, keyCode, 0,
-                    metaState, // <-- Hier ebenfalls
+                    metaState,
                     DEVICE_ID, 0,
                     KeyEvent.FLAG_FROM_SYSTEM,
                     FULL_SOURCE
