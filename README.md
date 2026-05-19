@@ -140,5 +140,7 @@ Power on the Raspberry Pi, and it should boot into Android Automotive with the K
 
 Note: It can occur, that bluetooth is disabled in the first boot. Enable it and pair with the rotary knob to test the functionality of the KnobService.
 
+Test 
+
 
 
