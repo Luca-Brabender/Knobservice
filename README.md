@@ -52,6 +52,7 @@ From your source code directory, go to /devices/brcm/rpi4/aosp_rpi4_car.mk, then
 
 ```text
 PRODUCT_PACKAGES += \
+    CarRotaryController \
     KnobService \
     privapp-permissions-knob.xml
 ```
