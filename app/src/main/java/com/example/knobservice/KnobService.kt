@@ -54,8 +54,12 @@ class KnobService : Service() {
     private val MAC_ADRESS = "64:B7:08:29:37:8E"
 
     private val carMenus = listOf(
-        "com.android.car.carlauncher/.CarLauncher",       // Home
-        "com.android.car.carlauncher/.AppGridActivity"       // AppGrid
+        "com.android.car.carlauncher/.CarLauncher",
+        "com.android.car.dialer/com.android.car.dialer.ui.TelecomActivity",
+        "com.android.car.carlauncher/.AppGridActivity" ,
+        "com.android.car.settings/com.android.car.settings.common.CarSettingActivities\$BluetoothSettingsActivity",
+        "com.android.car.settings/com.android.car.settings.common.CarSettingActivities\$NetworkAndInternetActivity",
+        "com.android.car.settings/com.android.car.settings.common.CarSettingActivities\$ProfileDetailsActivity"
     )
     private var currentMenuIndex = 0
 
