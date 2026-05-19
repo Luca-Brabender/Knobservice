@@ -63,8 +63,12 @@ class KnobService : Service() {
     private val MAC_ADRESS = "64:B7:08:29:37:8E"
 
     private val carMenus = listOf(
-        "com.android.car.carlauncher/.CarLauncher",       // Home
-        "com.android.car.carlauncher/.AppGridActivity"       // AppGrid
+        "com.android.car.carlauncher/.CarLauncher",
+        "com.android.car.dialer/com.android.car.dialer.ui.TelecomActivity",
+        "com.android.car.carlauncher/.AppGridActivity" ,
+        "com.android.car.settings/com.android.car.settings.common.CarSettingActivities\$BluetoothSettingsActivity",
+        "com.android.car.settings/com.android.car.settings.common.CarSettingActivities\$NetworkAndInternetActivity",
+        "com.android.car.settings/com.android.car.settings.common.CarSettingActivities\$ProfileDetailsActivity"      // AppGrid
     )
     private var currentMenuIndex = 0
 
@@ -440,50 +444,6 @@ class KnobService : Service() {
         }
     }
 
-    private fun forceRotaryFocus() {
-        val intent = Intent("com.android.car.rotary.ACTION_RESTORE_DEFAULT_FOCUS")
-        intent.setPackage("com.android.car.rotary")
-
-        try {
-            val userHandleClass = Class.forName("android.os.UserHandle")
-            val allUser = userHandleClass.getField("ALL").get(null)
-            val method = Context::class.java.getMethod("sendBroadcastAsUser", Intent::class.java, userHandleClass)
-            method.invoke(this, intent, allUser)
-        } catch (e: Exception) {
-            sendBroadcast(intent)
-        }
-    }
-
-    private fun injectRotaryScroll(delta: Int) {
-        val SOURCE_ROTARY_ENCODER = 0x00400000
-        val AXIS_VSCROLL = 9
-        val AXIS_SCROLL = 26
-
-        val eventTime = SystemClock.uptimeMillis()
-        val pointerProperties = MotionEvent.PointerProperties().apply {
-            id = 0
-            toolType = MotionEvent.TOOL_TYPE_UNKNOWN
-        }
-        val pointerCoords = MotionEvent.PointerCoords().apply {
-            setAxisValue(AXIS_VSCROLL, if (delta > 0) 1.0f else -1.0f)
-            setAxisValue(AXIS_SCROLL, if (delta > 0) 1.0f else -1.0f)
-        }
-
-        val motionEvent = MotionEvent.obtain(
-            eventTime, eventTime,
-            MotionEvent.ACTION_SCROLL,
-            1, arrayOf(pointerProperties), arrayOf(pointerCoords),
-            0, 0, 1.0f, 1.0f, 0, 0,
-            SOURCE_ROTARY_ENCODER, 0
-        )
-
-        try {
-            (getSystemService(Context.INPUT_SERVICE) as InputManager).injectInputEvent(motionEvent, 0)
-            Log.d("KnobService", "WAKE UP: Rotary Scroll gesendet")
-        } catch (e: Exception) {
-            Log.e("KnobService", "Scroll Fail", e)
-        }
-    }
 
     private fun injectKeyEvent(keyCode: Int, metaState: Int = 0) {
         Log.d("KnobService", ">>> SIMULIERE TASTENDRUCK: KeyCode $keyCode (Meta: $metaState) <<<")
