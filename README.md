@@ -138,6 +138,7 @@ sudo dd if=out/target/product/rpi4_car/vendor.img of=/dev/sdX3 bs=1M status=prog
 After the flashing process is complete, safely eject the SD card and insert it into your Raspberry Pi.
 Power on the Raspberry Pi, and it should boot into Android Automotive with the KnobService running in the background, ready to receive input from the rotary knob.
 
+Note: It can occur, that bluetooth is disabled in the first boot. Enable it and pair with the rotary knob to test the functionality of the KnobService.
 
 
 
