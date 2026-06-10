@@ -14,7 +14,11 @@ To get the AOSP Sourcecode and the specific libraries for Raspberry Pi, use foll
 ```bash
 # Get the AOSP source code
 repo init -u https://android.googlesource.com/platform/manifest -b android-13.0.0_r75 --depth=1
-git clone https://github.com/Luca-Brabender/aaos_local_manifest.git .repo/local_manifestsrepo sync
+
+mkdir -p .repo/local_manifests && \
+curl -o .repo/local_manifests/manifest_brcm_rpi4.xml https://raw.githubusercontent.com/Luca-Brabender/Knobservice/main/manifest/manifest_brcm_rpi4.xml && \
+curl -o .repo/local_manifests/remove_projects.xml https://raw.githubusercontent.com/Luca-Brabender/Knobservice/main/manifest/remove_projects.xml
+
 repo sync
 ````
 Depending on your internet connection, the download process may take several hours.
@@ -33,7 +37,7 @@ Then create subfolder src/com/example/knobservice and extract the following file
 - BootReceiver.kt
 
 
-This is how the folder structure should look like:
+This is how the folder structure of the KnobService Folder looks like:
 ```text
 KnobService/
 ├── Android.bp                 

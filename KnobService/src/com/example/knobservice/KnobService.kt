@@ -37,63 +37,66 @@ import java.util.UUID
 
 class KnobService : Service() {
 
-    private val KNOB_SERVICE_UUID =
-        UUID.fromString("12345678-1234-1234-1234-123456789abc")
-    private val TX_CHARACTERISTIC_UUID =
-        UUID.fromString("87654321-4321-4321-4321-cba987654321")
-    private val RX_CHARACTERISTIC_UUID = UUID.fromString("11111111-2222-3333-4444-555555555555")
-
+    private val KNOB_SERVICE_UUID = UUID.fromString("12345678-1234-1234-1234-123456789abc")
+    private val TX_CHARACTERISTIC_UUID = UUID.fromString("87654321-4321-4321-4321-cba987654321")
     private val CONFIG_DESCRIPTOR = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
     private lateinit var bluetoothAdapter: BluetoothAdapter
     private var bluetoothGatt: BluetoothGatt? = null
     private var isScanning = false
+    private var isNotificationEnabled = false
 
     private var lastSnapPoint: Int? = null
     private var lastButtonState: Int = 0
     private var lastNavTime = 0L
     private val NAV_DEBOUNCE_MS = 180L
+
     private var targetDeviceAddress: String? = null
-
-
 
     private val carMenus = listOf(
         "com.android.car.carlauncher/.CarLauncher",
         "com.android.car.dialer/com.android.car.dialer.ui.TelecomActivity",
-        "com.android.car.carlauncher/.AppGridActivity" ,
+        "com.android.car.carlauncher/.AppGridActivity",
         "com.android.car.settings/com.android.car.settings.common.CarSettingActivities\$BluetoothSettingsActivity",
         "com.android.car.settings/com.android.car.settings.common.CarSettingActivities\$NetworkAndInternetActivity",
         "com.android.car.settings/com.android.car.settings.common.CarSettingActivities\$ProfileDetailsActivity"
     )
     private var currentMenuIndex = 0
-
     private var lastZapTime = 0L
 
-    // Konstanten für Tasten
     private val KEY_CLICK = KeyEvent.KEYCODE_DPAD_CENTER
-
     private val CHANNEL_ID = "KnobServiceChannel"
     private val NOTIFICATION_ID = 1
 
-    private val bondStateReceiver = object : BroadcastReceiver(){
+    // 1. NEU: Überwacht den Bluetooth-Status des Systems (wichtig für den Initial-Boot)
+    private val bluetoothStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == BluetoothAdapter.ACTION_STATE_CHANGED) {
+                val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+                when (state) {
+                    BluetoothAdapter.STATE_ON -> {
+                        Log.d("KnobService", "Bluetooth wurde im System aktiviert (STATE_ON). Starte Bluetooth-Setup...")
+                        checkExistingOrScan()
+                    }
+                    BluetoothAdapter.STATE_OFF -> {
+                        Log.w("KnobService", "Bluetooth ist ausgeschaltet (STATE_OFF).")
+                    }
+                }
+            }
+        }
+    }
+
+    private val bondStateReceiver = object : BroadcastReceiver() {
         @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == BluetoothDevice.ACTION_BOND_STATE_CHANGED) {
                 val device: BluetoothDevice? = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
                 val bondState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR)
 
-                // Prüfen, ob die Adresse mit dem aktuell gescannten/gespeicherten Gerät übereinstimmt
                 if (device != null && targetDeviceAddress != null && device.address == targetDeviceAddress) {
-                    when (bondState) {
-                        BluetoothDevice.BOND_BONDED -> {
-                            Log.d("KnobService", "Pairing erfolgreich! Jetzt GATT-Verbindung aufbauen...")
-                            myConnectToDevice(device)
-                        }
-                        BluetoothDevice.BOND_NONE -> {
-                            Log.w("KnobService", "Pairing fehlgeschlagen oder aufgehoben. Setze Adresse zurück.")
-                            targetDeviceAddress = null
-                            startScan() // Scan neu starten, falls Verbindung verloren ging
-                        }
+                    if (bondState == BluetoothDevice.BOND_BONDED) {
+                        Log.d("KnobService", "Pairing erfolgreich! Jetzt GATT-Verbindung aufbauen...")
+                        myConnectToDevice(device)
                     }
                 }
             }
@@ -101,7 +104,6 @@ class KnobService : Service() {
     }
 
     private val gattCallback = object : BluetoothGattCallback() {
-
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
@@ -109,9 +111,11 @@ class KnobService : Service() {
                 gatt.requestMtu(128)
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 Log.w("KnobService", "GATT getrennt. Starte Scan für Reconnect...")
+
+                isNotificationEnabled = false // HIER NEU: Status zurücksetzen!
+
                 bluetoothGatt?.close()
                 bluetoothGatt = null
-
                 Thread.sleep(1000)
                 startScan()
             }
@@ -140,15 +144,10 @@ class KnobService : Service() {
             }
         }
 
-        override fun onCharacteristicChanged(
-            gatt: BluetoothGatt,
-            characteristic: BluetoothGattCharacteristic,
-            value: ByteArray
-        ) {
+        override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
             handleKnobData(value)
         }
     }
-
 
     override fun onCreate() {
         super.onCreate()
@@ -156,44 +155,48 @@ class KnobService : Service() {
 
         val notification: Notification = Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("Knob Service läuft")
-            .setContentText("Suche nach BLE-Drehknopf...")
+            .setContentText("Warte auf Bluetooth-Bereitschaft...")
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
             .build()
 
         if (Build.VERSION.SDK_INT >= 34) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-            )
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
 
-        val filter = IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+        val bondFilter = IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
         if (Build.VERSION.SDK_INT >= 33) {
-            registerReceiver(bondStateReceiver, filter, Context.RECEIVER_EXPORTED)
+            registerReceiver(bondStateReceiver, bondFilter, Context.RECEIVER_EXPORTED)
         } else {
-            registerReceiver(bondStateReceiver, filter)
+            registerReceiver(bondStateReceiver, bondFilter)
+        }
+
+        val stateFilter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(bluetoothStateReceiver, stateFilter, Context.RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(bluetoothStateReceiver, stateFilter)
         }
 
         setupBluetooth()
     }
 
-    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     override fun onDestroy() {
         super.onDestroy()
-        unregisterReceiver(bondStateReceiver)
-        bluetoothGatt?.close()
+        try {
+            unregisterReceiver(bondStateReceiver)
+            unregisterReceiver(bluetoothStateReceiver)
+        } catch (e: Exception) { e.printStackTrace() }
+
+        try {
+            bluetoothGatt?.close()
+        } catch (e: SecurityException) { e.printStackTrace() }
     }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val serviceChannel = NotificationChannel(
-                CHANNEL_ID,
-                "Knob Service Channel",
-                NotificationManager.IMPORTANCE_LOW
-            )
+            val serviceChannel = NotificationChannel(CHANNEL_ID, "Knob Service Channel", NotificationManager.IMPORTANCE_LOW)
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(serviceChannel)
         }
@@ -202,17 +205,43 @@ class KnobService : Service() {
     private fun setupBluetooth() {
         val manager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         bluetoothAdapter = manager.adapter
-        startScan()
+
+        if (bluetoothAdapter.isEnabled) {
+            Log.d("KnobService", "Bluetooth ist bereits aktiv. Starte direkt.")
+            checkExistingOrScan()
+        } else {
+            Log.w("KnobService", "Bluetooth ist noch inaktiv. Warte auf Aktivierung durch das System...")
+        }
+    }
+
+    // 4. NEU: Trennung von Scan und Prüfung gecachter Geräte
+    @SuppressLint("MissingPermission")
+    private fun checkExistingOrScan() {
+        val bondedDevices = bluetoothAdapter.bondedDevices
+        var foundExistingDevice = false
+
+        for (device in bondedDevices) {
+            val uuids = device.uuids
+            if (uuids != null && uuids.contains(ParcelUuid(KNOB_SERVICE_UUID))) {
+                Log.d("KnobService", "Bereits gepaartes Gerät im OS-Speicher gefunden: ${device.address}")
+                targetDeviceAddress = device.address
+                foundExistingDevice = true
+                myConnectToDevice(device)
+                break
+            }
+        }
+
+        if (!foundExistingDevice) {
+            startScan()
+        }
     }
 
     private fun startScan() {
         if (isScanning) return
+        if (!bluetoothAdapter.isEnabled) return
 
-        val filters = listOf(
-            ScanFilter.Builder().setServiceUuid(ParcelUuid(KNOB_SERVICE_UUID)).build()
-        )
-        val settings =
-            ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
+        val filters = listOf(ScanFilter.Builder().setServiceUuid(ParcelUuid(KNOB_SERVICE_UUID)).build())
+        val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
 
         try {
             bluetoothAdapter.bluetoothLeScanner?.startScan(filters, settings, scanCallback)
@@ -220,6 +249,8 @@ class KnobService : Service() {
             Log.d("KnobService", "Scanning gestartet...")
         } catch (e: SecurityException) {
             Log.e("KnobService", "Keine Berechtigung zum Scannen", e)
+        } catch (e: Exception) {
+            Log.e("KnobService", "Scanner konnte nicht initialisiert werden (evtl. BT-Stack ausgelastet)", e)
         }
     }
 
@@ -232,23 +263,20 @@ class KnobService : Service() {
 
             if (advertisedServices != null && advertisedServices.contains(targetParcelUuid)) {
                 val device = result.device
-
-                // DYNAMISCHER SPEICHERPUNKT: Adresse für den BondStateReceiver merken
                 targetDeviceAddress = device.address
-
                 myStopScan()
-                Log.d("KnobService", "Passendes Gerät per UUID gefunden! Name: ${device.name}, Adresse: ${targetDeviceAddress}")
+                Log.d("KnobService", "Gerät per UUID gefunden! Name: ${device.name}, Adresse: $targetDeviceAddress")
 
                 when (device.bondState) {
                     BluetoothDevice.BOND_NONE -> {
-                        Log.d("KnobService", "Starte Bonding für $targetDeviceAddress...")
+                        Log.d("KnobService", "Starte Bonding...")
                         device.createBond()
                     }
                     BluetoothDevice.BOND_BONDING -> {
-                        Log.d("KnobService", "Bonding läuft... Bitte warten.")
+                        Log.d("KnobService", "Bonding läuft...")
                     }
                     BluetoothDevice.BOND_BONDED -> {
-                        Log.d("KnobService", "Bereits gebonded. Verbinde direkt...")
+                        Log.d("KnobService", "Bereits gebonded. Verbinde...")
                         myConnectToDevice(device)
                     }
                 }
@@ -256,47 +284,42 @@ class KnobService : Service() {
         }
     }
 
-    @RequiresPermission(Manifest.permission.BLUETOOTH_SCAN)
+    @SuppressLint("MissingPermission")
     private fun myStopScan() {
-        bluetoothAdapter.bluetoothLeScanner?.stopScan(scanCallback)
+        if (!isScanning) return
+        try {
+            bluetoothAdapter.bluetoothLeScanner?.stopScan(scanCallback)
+        } catch (e: Exception) { e.printStackTrace() }
         isScanning = false
     }
 
-    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+    @SuppressLint("MissingPermission")
     private fun myConnectToDevice(device: BluetoothDevice) {
+        if (bluetoothGatt != null) return
         Log.d("KnobService", "Verbinde mit GATT Server auf ${device.address}")
-
-        if(bluetoothGatt != null)
-            return
-
         bluetoothGatt = device.connectGatt(this, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
     }
 
+    private fun enableNotification(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
+        if (isNotificationEnabled) {
+            Log.d("KnobService", "Notifications bereits aktiv. Überspringe doppelte Aktivierung.")
+            return
+        }
 
-    private fun enableNotification(
-        gatt: BluetoothGatt,
-        characteristic: BluetoothGattCharacteristic
-    ) {
         try {
             gatt.setCharacteristicNotification(characteristic, true)
-
             val descriptor = characteristic.getDescriptor(CONFIG_DESCRIPTOR)
             if (descriptor != null) {
                 descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
                 gatt.writeDescriptor(descriptor)
                 Log.d("KnobService", "Notifications aktiviert.")
             }
-        } catch (e: SecurityException) {
-            e.printStackTrace()
-        }
+        } catch (e: SecurityException) { e.printStackTrace() }
     }
 
     private fun handleKnobData(value: ByteArray?) {
         if (value == null || value.isEmpty()) return
-        if(value.size < 12) return
-
-        val hexString = value.joinToString(" ") { "%02x".format(it) }
-        Log.i("KnobService", "INPUT EMPFANGEN: [ $hexString ]")
+        if (value.size < 12) return
 
         if (value[5].toInt() == 0x03) {
             val currentSnapPoint = ByteBuffer.wrap(value, 6, 4)
@@ -313,10 +336,6 @@ class KnobService : Service() {
                 fingerCount = value[13].toInt()
             }
 
-            Log.d(
-                "KnobService",
-                "SnapPoint: $currentSnapPoint, Finger: $fingerCount, Button: ${if (buttonState == 1) "DOWN" else "UP"}"
-            )
             if (buttonState == 1 && lastButtonState == 0) {
                 injectKeyEvent(KEY_CLICK)
             }
@@ -330,7 +349,6 @@ class KnobService : Service() {
                     if (currentTime - lastNavTime >= NAV_DEBOUNCE_MS) {
                         lastNavTime = currentTime
                         if (delta > 0) {
-
                             Log.d("KnobService", "Drehung nach RECHTS (Delta: $delta)")
                             when (fingerCount) {
                                 0, 1, 2 -> injectTabNavigation(true)
@@ -340,7 +358,6 @@ class KnobService : Service() {
                             }
                         } else if (delta < 0) {
                             Log.d("KnobService", "Drehung nach LINKS (Delta: $delta)")
-
                             when (fingerCount) {
                                 0, 1, 2 -> injectTabNavigation(false)
                                 3 -> injectKeyEvent(19) // DPAD_UP
@@ -369,17 +386,11 @@ class KnobService : Service() {
         val intent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
             component = cn
-
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
-                    Intent.FLAG_ACTIVITY_NO_ANIMATION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NO_ANIMATION)
         }
-
-        Log.i("KnobService", "Zapping zu: $componentString (Index: $currentMenuIndex)")
 
         val currentUserId = getCurrentForegroundUser()
         val success = startActivityAsSpecificUser(intent, currentUserId)
-
         if (success) {
             android.widget.Toast.makeText(this, "Wechsel: ${cn.shortClassName}", android.widget.Toast.LENGTH_SHORT).show()
         }
@@ -389,30 +400,19 @@ class KnobService : Service() {
         return try {
             val amClass = Class.forName("android.app.ActivityManager")
             val method = amClass.getMethod("getCurrentUser")
-            val user = method.invoke(null) as Int
-            Log.d("KnobService", "Aktiver User erkannt: $user")
-            user
-        } catch (e: Exception) {
-            Log.w("KnobService", "Konnte CurrentUser nicht ermitteln, nutze Fallback 10")
-        }
+            method.invoke(null) as Int
+        } catch (e: Exception) { 10 }
     }
 
     private fun startActivityAsSpecificUser(intent: Intent, userId: Int): Boolean {
         return try {
             val userHandleClass = Class.forName("android.os.UserHandle")
             val userHandle = userHandleClass.getMethod("of", Int::class.javaPrimitiveType).invoke(null, userId)
-
             val method = Context::class.java.getMethod("startActivityAsUser", Intent::class.java, userHandleClass)
             method.invoke(this, intent, userHandle)
             true
         } catch (e: Exception) {
-            Log.e("KnobService", "startActivityAsUser für User $userId fehlgeschlagen: ${e.message}")
-            try {
-                startActivity(intent)
-                true
-            } catch (inner: Exception) {
-                false
-            }
+            try { startActivity(intent); true } catch (inner: Exception) { false }
         }
     }
 
@@ -425,46 +425,40 @@ class KnobService : Service() {
     }
 
     private fun injectKeyEvent(keyCode: Int, metaState: Int = 0) {
-        Log.d("KnobService", ">>> SIMULIERE TASTENDRUCK: KeyCode $keyCode (Meta: $metaState) <<<")
-        val DEVICE_ID = 1
+        Log.d("KnobService", ">>> SIMULIERE TASTENDRUCK: KeyCode $keyCode <<<")
 
+        // Dynamische Zuweisung der Quelle
         val finalSource = if (keyCode == KeyEvent.KEYCODE_TAB) {
-            SOURCE_KEYBOARD // Entspricht 0x00000101 (Klassische Tastatur)
+            SOURCE_KEYBOARD
         } else {
             val SOURCE_ROTARY_ENCODER = 0x00400000
-            SOURCE_ROTARY_ENCODER or 0x00000001 // Entspricht FULL_SOURCE (Drehknopf)
+            SOURCE_ROTARY_ENCODER or 0x00000001
         }
+
+        val DEVICE_ID = 1
 
         Thread {
             try {
                 val inputManager = getSystemService(Context.INPUT_SERVICE) as InputManager
-                val eventTime = SystemClock.uptimeMillis()
 
-                // DOWN-Event mit metaState
+                val eventTimeDown = SystemClock.uptimeMillis()
                 val eventDown = KeyEvent(
-                    eventTime, eventTime, KeyEvent.ACTION_DOWN, keyCode, 0,
-                    metaState,
-                    DEVICE_ID, 0,
-                    KeyEvent.FLAG_FROM_SYSTEM,
-                    finalSource
+                    eventTimeDown, eventTimeDown, KeyEvent.ACTION_DOWN, keyCode, 0,
+                    metaState, DEVICE_ID, 0, KeyEvent.FLAG_FROM_SYSTEM, finalSource
                 )
                 inputManager.javaClass.getMethod("injectInputEvent", android.view.InputEvent::class.java, Int::class.javaPrimitiveType)
                     .invoke(inputManager, eventDown, 0)
 
                 Thread.sleep(20)
 
-                // UP-Event mit metaState
+                val eventTimeUp = SystemClock.uptimeMillis()
                 val eventUp = KeyEvent(
-                    eventTime, eventTime, KeyEvent.ACTION_UP, keyCode, 0,
-                    metaState,
-                    DEVICE_ID, 0,
-                    KeyEvent.FLAG_FROM_SYSTEM,
-                    finalSource
+                    eventTimeUp, eventTimeUp, KeyEvent.ACTION_UP, keyCode, 0,
+                    metaState, DEVICE_ID, 0, KeyEvent.FLAG_FROM_SYSTEM, finalSource
                 )
                 inputManager.javaClass.getMethod("injectInputEvent", android.view.InputEvent::class.java, Int::class.javaPrimitiveType)
                     .invoke(inputManager, eventUp, 0)
 
-                Log.d("KnobService", "Rotary-Event erzwungen: $keyCode (Device $DEVICE_ID)")
             } catch (e: Exception) {
                 Log.e("KnobService", "Fehler beim Injizieren des KeyEvents", e)
             }
