@@ -112,7 +112,7 @@ class KnobService : Service() {
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 Log.w("KnobService", "GATT getrennt. Starte Scan für Reconnect...")
 
-                isNotificationEnabled = false // HIER NEU: Status zurücksetzen!
+                isNotificationEnabled = false
 
                 bluetoothGatt?.close()
                 bluetoothGatt = null
@@ -214,7 +214,6 @@ class KnobService : Service() {
         }
     }
 
-    // 4. NEU: Trennung von Scan und Prüfung gecachter Geräte
     @SuppressLint("MissingPermission")
     private fun checkExistingOrScan() {
         val bondedDevices = bluetoothAdapter.bondedDevices
