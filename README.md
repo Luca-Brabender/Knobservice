@@ -51,12 +51,10 @@ KnobService/
                 └── KnobService.kt   
 ```
 
-From your source code directory, go to /devices/brcm/rpi4/aosp_rpi4_car.mk, then add following code:
+From your source code directory, enter following command:
 
 ```text
-PRODUCT_PACKAGES += \
-    KnobService \
-    privapp-permissions-knob.xml
+curl -L -o device/brcm/rpi4/aosp_rpi4_car.mk https://raw.githubusercontent.com/Luca-Brabender/KnobService/DPAD/aosp_rpi4_car.mk
 ```
 
 ## Build Android Automotive
