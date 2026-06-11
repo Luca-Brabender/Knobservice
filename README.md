@@ -26,18 +26,18 @@ Depending on your internet connection, the download process may take several hou
 
 
 ## Setting up The Knobservice
-go to packages/apps and create a new folder called "Knobservice". Inside this folder, extract the following files:
-- Android.bp
-- AndroidManifest.xml
-- privapp-permissions.xml
+To implement the KnobService, use the following commands:
+```text
+git clone -b DPAD https://github.com/Luca-Brabender/KnobService.git knob_clone
 
-Then create subfolder src/com/example/knobservice and extract the following files:
+cp -r knob_clone/KnobService/* packages/apps/KnobService/ 
 
-- KnobService.kt
-- BootReceiver.kt
+rm -rf knob_clone 
+
+```
 
 
-This is how the folder structure of the KnobService Folder looks like:
+This is how the folder structure of the KnobService Folder should look like under packages/apps/KnobService:
 ```text
 KnobService/
 ├── Android.bp                 
@@ -50,7 +50,6 @@ KnobService/
                 ├── BootReceiver.kt  
                 └── KnobService.kt   
 ```
-NOTE: Make sure you change the Android.txt in the repository to Android.bp, otherwise the build system won't recognize the new service.
 
 From your source code directory, go to /devices/brcm/rpi4/aosp_rpi4_car.mk, then add following code:
 

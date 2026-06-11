@@ -3,23 +3,15 @@
     <remote name="github" fetch="https://github.com/" />
 
     <!-- Raspberry Pi -->
-    <project path="device/brcm/rpi4" name="grapeup/aaos_device_brcm_rpi4" remote="github" revision="android-13.0" >
+    <project path="device/brcm/rpi4" name="raspberry-vanilla/android_device_brcm_rpi4" remote="github" revision="android-13.0" >
         <linkfile src="mkimg.sh" dest="rpi4-mkimg.sh" />
     </project>
     <project path="device/brcm/rpi4-kernel" name="raspberry-vanilla/android_device_brcm_rpi4-kernel" remote="github" revision="android-13.0" />
     <project path="vendor/brcm" name="raspberry-vanilla/proprietary_vendor_brcm" remote="github" revision="android-13.0" />
 
-    <!-- Automotive -->
-    <project path="device/brcm/rpi4-car" name="grapeup/aaos_device_brcm_rpi4_car" remote="github" revision="android-13.0" />
-    <project path="packages/apps/Car/AOSPHost" name="grapeup/aaos_car_aosp_host" remote="github" revision="android-13.0" />
-
     <!-- Audio -->
     <project path="external/alsa-lib" name="raspberry-vanilla/android_external_alsa-lib" remote="github" revision="android-13.0" />
     <project path="external/alsa-utils" name="raspberry-vanilla/android_external_alsa-utils" remote="github" revision="android-13.0" />
-
-    <!-- Bluetooth -->
-    <remove-project name="platform/hardware/interfaces" />
-    <project path="hardware/interfaces" name="grapeup/aaos_android_hardware_interfaces" remote="github" revision="android-13.0" />
 
     <!-- Build -->
     <remove-project name="platform/build" />
@@ -45,6 +37,7 @@
     <!-- FFmpeg -->
     <project path="external/ffmpeg" name="raspberry-vanilla/android_external_ffmpeg" remote="github" revision="android-13.0" />
     <project path="external/ffmpeg_codec2" name="raspberry-vanilla/android_external_ffmpeg_codec2" remote="github" revision="android-13.0" />
+    <project path="external/libdav1d" name="raspberry-vanilla/android_external_libdav1d" remote="github" revision="android-13.0" />
     <project path="external/libudev-zero" name="raspberry-vanilla/android_external_libudev-zero" remote="github" revision="android-13.0" />
 
     <!-- Graphics -->
