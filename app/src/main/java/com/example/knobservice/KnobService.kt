@@ -36,9 +36,7 @@ import java.nio.ByteOrder
 import java.util.UUID
 import android.car.Car
 import android.car.input.CarInputManager
-import android.view.Display
-import java.util.concurrent.Executors
-import java.util.concurrent.ExecutorService
+
 
 class KnobService : Service() {
 
