@@ -14,7 +14,11 @@ To get the AOSP Sourcecode and the specific libraries for Raspberry Pi, use foll
 ```bash
 # Get the AOSP source code
 repo init -u https://android.googlesource.com/platform/manifest -b android-13.0.0_r75 --depth=1
-git clone https://github.com/Luca-Brabender/aaos_local_manifest.git .repo/local_manifestsrepo sync
+
+mkdir -p .repo/local_manifests && \
+curl -o .repo/local_manifests/manifest_brcm_rpi4.xml https://raw.githubusercontent.com/Luca-Brabender/Knobservice/DPAD/manifest_brcm_rpi4.xml && \
+curl -o .repo/local_manifests/remove_projects.xml https://raw.githubusercontent.com/Luca-Brabender/Knobservice/DPAD/remove_projects.xml
+
 repo sync
 ````
 Depending on your internet connection, the download process may take several hours.
@@ -22,18 +26,18 @@ Depending on your internet connection, the download process may take several hou
 
 
 ## Setting up The Knobservice
-go to packages/apps and create a new folder called "Knobservice". Inside this folder, extract the following files:
-- Android.bp
-- AndroidManifest.xml
-- privapp-permissions.xml
+To implement the KnobService, use the following commands:
+```text
+git clone -b DPAD https://github.com/Luca-Brabender/KnobService.git knob_clone
 
-Then create subfolder src/com/example/knobservice and extract the following files:
+cp -r knob_clone/KnobService/* packages/apps/KnobService/ 
 
-- KnobService.kt
-- BootReceiver.kt
+rm -rf knob_clone 
+
+```
 
 
-This is how the folder structure should look like:
+This is how the folder structure of the KnobService Folder should look like under packages/apps/KnobService:
 ```text
 KnobService/
 ├── Android.bp                 
@@ -46,15 +50,11 @@ KnobService/
                 ├── BootReceiver.kt  
                 └── KnobService.kt   
 ```
-NOTE: Make sure you change the Android.txt in the repository to Android.bp, otherwise the build system won't recognize the new service.
 
-From your source code directory, go to /devices/brcm/rpi4/aosp_rpi4_car.mk, then add following code:
+From your source code directory, enter following command:
 
 ```text
-PRODUCT_PACKAGES += \
-    CarRotaryController \
-    KnobService \
-    privapp-permissions-knob.xml
+curl -L -o device/brcm/rpi4/aosp_rpi4_car.mk https://raw.githubusercontent.com/Luca-Brabender/KnobService/DPAD/aosp_rpi4_car.mk
 ```
 
 ## Build Android Automotive
@@ -74,72 +74,22 @@ insert the micro SD card into your computer and run the following commands:
 lsblk
 # Unmount the SD card if it is automatically mounted (sdX is just a placeholder)
 sudo umount /dev/sdX*
-# Flash the image to the SD Card
-sudo fdisk /dev/sdX
+#create the image
+./rpi4-mkimg.sh
 ```
 
-the ```fdisk``` command opens a  terminal-based interface. Use the following commands to flash the image:
-```bash
-# Inside fdisk, use the following commands:
-o # Create a new empty DOS partition table
 
-# CREATE PARTITION 1:
-n # Add a new partition
-p # Primary partition
-1 # Partition number
-Enter # First sector (accept default)
-+128M # Last sector (size of the partition)
-t # Change partition type
-c # Set partition type to W95 FAT32 (LBA)
-a # Toggle the bootable flag on the partition
-
-# CREATE PARTITION 2:
-n # Add a new partition
-p # Primary partition
-2 # Partition number
-Enter # First sector (accept default)
-+2048M # Last sector (size of the partition)
-
-# CREATE PARTITION 3:
-n # Add a new partition
-p # Primary partition
-3 # Partition number
-Enter # First sector (accept default)
-+1024M # Last sector (size of the partition)
-
-# CREATE PARTITION 4:
-n # Add a new partition
-p # Primary partition
-4 # Partition number
-Enter # First sector (accept default)
-Enter # Last sector (accept default) 
-
-w # Write the partition table to the SD card and exit
-```
-
-Creating the filesystems:
-```bash
-sudo mkfs.vfat /dev/sdX1
-sudo mkfs.ext4 -L userdata /dev/sdX4
-```
-
-Now, time to write the image to the SD card. Use the following commands to fill each partition:
+Now, time to write the image to the SD card. Use the following command to fill the sd card:
 
 ```bash
-# mount the first partition
-sudo mount /dev/sdX1 /mnt
-# Copy the boot files to the first partition
-sudo cp -r out/target/product/rpi4/rpiboot/* /mnt/
-# Put the system image on the second partition
-sudo dd if=out/target/product/rpi4_car/system.img of=/dev/sdX2 bs=1M status=progress
-# Put the vendor image on the third partition
-sudo dd if=out/target/product/rpi4_car/vendor.img of=/dev/sdX3 bs=1M status=progress
+ sudo dd if=out/target/product/rpi4/RaspberryVanillaAOSP13-20260611-rpi4.img of=/dev/sdX bs=4M status=progress && sync 
 ```
 
 After the flashing process is complete, safely eject the SD card and insert it into your Raspberry Pi.
 Power on the Raspberry Pi, and it should boot into Android Automotive with the KnobService running in the background, ready to receive input from the rotary knob.
 
-Note: It can occur, that bluetooth is disabled in the first boot. Enable it and pair with the rotary knob to test the functionality of the KnobService.
+Note: It can occur, that bluetooth is disabled in the first boot. Enable it and pair with the rotary knob. Restart the Raspberry Pi and you can controll the system with the Rotary Knob.
+
 
 
 
