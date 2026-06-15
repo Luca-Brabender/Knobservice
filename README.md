@@ -30,6 +30,8 @@ To implement the KnobService, use the following commands:
 ```text
 git clone -b CarRotaryController https://github.com/Luca-Brabender/KnobService.git knob_clone
 
+mkdir packages/apps/KnobService
+
 cp -r knob_clone/KnobService/* packages/apps/KnobService/ 
 
 rm -rf knob_clone 

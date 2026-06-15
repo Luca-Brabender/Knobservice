@@ -29,14 +29,12 @@ import android.os.ParcelUuid
 import android.os.SystemClock
 import android.util.Log
 import android.view.KeyEvent
-import android.view.MotionEvent
 import androidx.annotation.RequiresPermission
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.UUID
 import android.car.Car
 import android.car.input.CarInputManager
-
 
 class KnobService : Service() {
 
@@ -58,7 +56,8 @@ class KnobService : Service() {
     private var lastSnapPoint: Int? = null
     private var lastButtonState: Int = 0
 
-    private val MAC_ADRESS = "64:B7:08:29:37:8E"
+    // Dynamischer Speicher für den aktuell gefundenen Controller
+    private var discoveredDevice: BluetoothDevice? = null
 
     private val carMenus = listOf(
         "com.android.car.carlauncher/.CarLauncher",
@@ -66,7 +65,7 @@ class KnobService : Service() {
         "com.android.car.carlauncher/.AppGridActivity" ,
         "com.android.car.settings/com.android.car.settings.common.CarSettingActivities\$BluetoothSettingsActivity",
         "com.android.car.settings/com.android.car.settings.common.CarSettingActivities\$NetworkAndInternetActivity",
-        "com.android.car.settings/com.android.car.settings.common.CarSettingActivities\$ProfileDetailsActivity"      // AppGrid
+        "com.android.car.settings/com.android.car.settings.common.CarSettingActivities\$ProfileDetailsActivity"
     )
     private var currentMenuIndex = 0
 
@@ -74,7 +73,6 @@ class KnobService : Service() {
 
     private val KEY_SYSTEM_UP = KeyEvent.KEYCODE_SYSTEM_NAVIGATION_UP
     private val KEY_SYSTEM_DOWN = KeyEvent.KEYCODE_SYSTEM_NAVIGATION_DOWN
-
 
     private val CHANNEL_ID = "KnobServiceChannel"
     private val NOTIFICATION_ID = 1
@@ -86,7 +84,8 @@ class KnobService : Service() {
                 val device: BluetoothDevice? = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
                 val bondState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR)
 
-                if (device?.address == MAC_ADRESS) { // Adresse vorher speichern
+                // Prüft die Adresse dynamisch gegen das gefundene Scan-Ergebnis
+                if (device != null && discoveredDevice != null && device.address == discoveredDevice?.address) {
                     if (bondState == BluetoothDevice.BOND_BONDED) {
                         Log.d("KnobService", "Pairing erfolgreich! Jetzt GATT-Verbindung aufbauen...")
                         myConnectToDevice(device)
@@ -150,7 +149,6 @@ class KnobService : Service() {
         }
     }
 
-
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
@@ -192,6 +190,7 @@ class KnobService : Service() {
         super.onDestroy()
         unregisterReceiver(bondStateReceiver)
         bluetoothGatt?.close()
+        discoveredDevice = null
     }
 
     private fun createNotificationChannel() {
@@ -237,10 +236,11 @@ class KnobService : Service() {
             val advertisedServices: List<ParcelUuid>? = scanRecord.serviceUuids
             val targetParcelUuid = ParcelUuid(KNOB_SERVICE_UUID)
 
-
             if (advertisedServices != null && advertisedServices.contains(targetParcelUuid)) {
                 val device = result.device
                 myStopScan()
+
+                discoveredDevice = device
                 Log.d("KnobService", "Passendes Gerät per UUID gefunden! Name: ${device.name}, Adresse: ${device.address}")
 
                 when (device.bondState) {
@@ -275,7 +275,6 @@ class KnobService : Service() {
 
         bluetoothGatt = device.connectGatt(this, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
     }
-
 
     private fun enableNotification(
         gatt: BluetoothGatt,
@@ -331,9 +330,8 @@ class KnobService : Service() {
                     if (delta > 0) {
                         Log.d("KnobService", "Drehung nach RECHTS (Delta: $delta)")
                         when (fingerCount) {
-                            // Nutze DPAD_RIGHT (22) statt KEY_NEXT (261)
                             0, 1, 2 -> injectRotaryCommand(true)
-                            3 -> injectCarInputKey(KEY_SYSTEM_UP) // DPAD_DOWN
+                            3 -> injectCarInputKey(KEY_SYSTEM_UP)
                             4 -> zapToMenu(1)
                             5 -> injectKeyEvent(KeyEvent.KEYCODE_BACK)
                         }
@@ -342,7 +340,7 @@ class KnobService : Service() {
 
                         when (fingerCount) {
                             0, 1, 2 -> injectRotaryCommand(false)
-                            3 -> injectCarInputKey(KEY_SYSTEM_DOWN) // DPAD_UP
+                            3 -> injectCarInputKey(KEY_SYSTEM_DOWN)
                             4 -> zapToMenu(-1)
                             5 -> injectKeyEvent(KeyEvent.KEYCODE_BACK)
                         }
@@ -405,7 +403,6 @@ class KnobService : Service() {
         } catch (e: Exception) {
             Log.e("KnobService", "startActivityAsUser für User $userId fehlgeschlagen: ${e.message}")
             try {
-                // Letzter Rettungsversuch: Normaler Start
                 startActivity(intent)
                 true
             } catch (inner: Exception) {
@@ -442,7 +439,6 @@ class KnobService : Service() {
         }
     }
 
-
     private fun injectKeyEvent(keyCode: Int, metaState: Int = 0) {
         Log.d("KnobService", ">>> SIMULIERE TASTENDRUCK: KeyCode $keyCode (Meta: $metaState) <<<")
         val SOURCE_ROTARY_ENCODER = 0x00400000
@@ -464,10 +460,9 @@ class KnobService : Service() {
                 inputManager.javaClass.getMethod("injectInputEvent", android.view.InputEvent::class.java, Int::class.javaPrimitiveType)
                     .invoke(inputManager, eventDown, 0)
 
-                // UP-Event mit metaState
                 val eventUp = KeyEvent(
                     eventTime, eventTime, KeyEvent.ACTION_UP, keyCode, 0,
-                    metaState, // <-- Hier ebenfalls
+                    metaState,
                     DEVICE_ID, 0,
                     KeyEvent.FLAG_FROM_SYSTEM,
                     FULL_SOURCE
