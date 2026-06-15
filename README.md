@@ -28,7 +28,7 @@ Depending on your internet connection, the download process may take several hou
 ## Setting up The Knobservice
 To implement the KnobService, use the following commands:
 ```text
-git clone -b DPAD https://github.com/Luca-Brabender/KnobService.git knob_clone
+git clone -b CarRotaryController https://github.com/Luca-Brabender/KnobService.git knob_clone
 
 cp -r knob_clone/KnobService/* packages/apps/KnobService/ 
 
@@ -54,7 +54,7 @@ KnobService/
 From your source code directory, enter following command:
 
 ```text
-curl -L -o device/brcm/rpi4/aosp_rpi4_car.mk https://raw.githubusercontent.com/Luca-Brabender/KnobService/DPAD/aosp_rpi4_car.mk
+curl -L -o device/brcm/rpi4/aosp_rpi4_car.mk https://raw.githubusercontent.com/Luca-Brabender/KnobService/CarRotaryController/aosp_rpi4_car.mk
 ```
 
 ## Build Android Automotive
@@ -84,6 +84,7 @@ Now, time to write the image to the SD card. Use the following command to fill t
 ```bash
  sudo dd if=out/target/product/rpi4/RaspberryVanillaAOSP13-20260611-rpi4.img of=/dev/sdX bs=4M status=progress && sync 
 ```
+NOTE: The SD-Card's image name may differ depending on the date of the build. Please check the out/target/product/rpi4/ folder for the correct image name. Also, make sure to replace /dev/sdX with the actual device name of your SD card.
 
 After the flashing process is complete, safely eject the SD card and insert it into your Raspberry Pi.
 Power on the Raspberry Pi, and it should boot into Android Automotive with the KnobService running in the background, ready to receive input from the rotary knob.
